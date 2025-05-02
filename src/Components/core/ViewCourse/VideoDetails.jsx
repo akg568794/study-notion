@@ -250,7 +250,7 @@ const VideoDetails = () => {
         </p>
       </div>
       {/* Floating Take Test Button */}
-      {isLastLecture() && (
+      {isLastLecture() && completedLectures?.length === totalNoOfLectures && (
         <div className="fixed bottom-5 right-5">
           <button
             onClick={() =>

@@ -1,18 +1,31 @@
 import React, { useEffect, useRef, useState } from 'react';
-import * as faceapi from 'face-api.js';
-import { isMobile, isTablet } from 'react-device-detect';
+import * as blazeface from '@tensorflow-models/blazeface';
+import * as cocoSsd from '@tensorflow-models/coco-ssd';
+import * as tf from '@tensorflow/tfjs';
 import { toast } from 'react-hot-toast';
 import { BiRefresh } from 'react-icons/bi';
+
+// Initialize TensorFlow.js
+tf.setBackend('webgl').then(() => {
+    console.log('WebGL backend initialized');
+    tf.ready().then(() => {
+        console.log('TensorFlow.js ready');
+    });
+});
 
 const TestProctoring = ({ onViolation, onFatalViolation }) => {
     const videoRef = useRef();
     const streamRef = useRef();
+    const [faceModel, setFaceModel] = useState(null);
+    const [objectModel, setObjectModel] = useState(null);
     const [modelsLoaded, setModelsLoaded] = useState(false);
     const [stream, setStream] = useState(null);
     const [cameraError, setCameraError] = useState(null);
     const [isActive, setIsActive] = useState(true);
     const detectionInterval = useRef();
     const consecutiveNoFaceCount = useRef(0);
+    const consecutiveMultiFaceCount = useRef(0);
+    const consecutivePhoneCount = useRef(0);
     const lastDetectionTime = useRef(Date.now());
 
     const cleanup = () => {
@@ -27,17 +40,17 @@ const TestProctoring = ({ onViolation, onFatalViolation }) => {
 
     const startVideo = async () => {
         if (!isActive) return;
-        
+
         try {
             setCameraError(null);
-            const stream = await navigator.mediaDevices?.getUserMedia({ 
+            const stream = await navigator.mediaDevices?.getUserMedia({
                 video: {
                     facingMode: "user",
                     width: { min: 640, ideal: 1280, max: 1920 },
                     height: { min: 480, ideal: 720, max: 1080 }
                 }
             });
-            
+
             if (videoRef.current && isActive) {
                 videoRef.current.srcObject = stream;
                 streamRef.current = stream;
@@ -48,7 +61,7 @@ const TestProctoring = ({ onViolation, onFatalViolation }) => {
         } catch (error) {
             console.error("Error accessing webcam:", error);
             let errorMessage = "Failed to access camera. ";
-            
+
             if (error.name === 'NotFoundError') {
                 errorMessage += "No camera detected.";
             } else if (error.name === 'NotAllowedError') {
@@ -58,43 +71,50 @@ const TestProctoring = ({ onViolation, onFatalViolation }) => {
             } else {
                 errorMessage += "Please check camera permissions.";
             }
-            
+
             setCameraError(errorMessage);
-            toast.error(errorMessage);
+            onFatalViolation(errorMessage);
         }
     };
 
     useEffect(() => {
-        if (isMobile && !isTablet && !window.navigator.userAgent.includes('Windows') && !window.navigator.userAgent.includes('Macintosh')) {
-            onFatalViolation("Mobile devices are not allowed for taking tests");
-            return;
-        }
-
         const loadModels = async () => {
             try {
-                await Promise.all([
-                    faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
-                    faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
-                    faceapi.nets.faceRecognitionNet.loadFromUri('/models'),
+                await tf.ready();
+
+                if (tf.getBackend() !== 'webgl') {
+                    await tf.setBackend('webgl');
+                }
+
+                console.log("TensorFlow.js initialized with backend:", tf.getBackend());
+
+                const [face, object] = await Promise.all([
+                    blazeface.load({ maxFaces: 2 }),
+                    cocoSsd.load(),
                 ]);
+
+                setFaceModel(face);
+                setObjectModel(object);
                 setModelsLoaded(true);
+                console.log("Models loaded successfully");
             } catch (error) {
-                console.error("Error loading face detection models:", error);
-                onFatalViolation("Failed to initialize proctoring system");
+                console.error("Error loading models:", error);
+                onFatalViolation("Failed to initialize proctoring system. Please refresh the page.");
+                setCameraError("Failed to load detection models. Please refresh the page.");
             }
         };
-        loadModels();
 
+        loadModels();
         return cleanup;
     }, []);
 
     useEffect(() => {
-        if (!modelsLoaded || !isActive) return;
+        if (!modelsLoaded || !isActive || !faceModel || !objectModel) return;
         startVideo();
-    }, [modelsLoaded]);
+    }, [modelsLoaded, faceModel, objectModel]);
 
     useEffect(() => {
-        if (!stream || !videoRef.current || !isActive) return;
+        if (!stream || !videoRef.current || !isActive || !faceModel || !objectModel) return;
 
         videoRef.current.onloadedmetadata = () => {
             detectionInterval.current = setInterval(async () => {
@@ -109,37 +129,59 @@ const TestProctoring = ({ onViolation, onFatalViolation }) => {
                     }
 
                     const now = Date.now();
-                    if (now - lastDetectionTime.current < 500) {
+                    if (now - lastDetectionTime.current < 300) {
                         return;
                     }
                     lastDetectionTime.current = now;
 
-                    const detections = await faceapi.detectAllFaces(
-                        videoRef.current,
-                        new faceapi.TinyFaceDetectorOptions({
-                            inputSize: 320,
-                            scoreThreshold: 0.3
-                        })
-                    );
+                    const [facePredictions, objects] = await Promise.all([
+                        faceModel.estimateFaces(videoRef.current, { flipHorizontal: false }),
+                        objectModel.detect(videoRef.current)
+                    ]);
 
                     if (!isActive) return;
 
-                    if (detections.length === 0) {
+                    if (facePredictions.length === 0) {
                         consecutiveNoFaceCount.current++;
-                        if (consecutiveNoFaceCount.current >= 3) {
+                        consecutiveMultiFaceCount.current = 0;
+                        if (consecutiveNoFaceCount.current >= 2) {
                             onViolation("No face detected");
                             consecutiveNoFaceCount.current = 0;
                         }
-                    } else if (detections.length > 1) {
-                        onViolation("Multiple faces detected");
+                    } else if (facePredictions.length > 1) {
+                        consecutiveMultiFaceCount.current++;
                         consecutiveNoFaceCount.current = 0;
+                        if (consecutiveMultiFaceCount.current >= 2) {
+                            onViolation("Multiple faces detected");
+                            consecutiveMultiFaceCount.current = 0;
+                        }
                     } else {
                         consecutiveNoFaceCount.current = 0;
+                        consecutiveMultiFaceCount.current = 0;
                     }
+
+                    const phoneDetections = objects.filter(obj =>
+                        ['cell phone', 'mobile phone', 'smartphone', 'phone', 'camera'].includes(obj.class.toLowerCase()) &&
+                        obj.score > 0.5
+                    );
+
+                    if (phoneDetections.length > 0) {
+                        consecutivePhoneCount.current++;
+                        if (consecutivePhoneCount.current >= 2) {
+                            const phonePositions = phoneDetections.map(detection =>
+                                `(${Math.round(detection.bbox[0])}, ${Math.round(detection.bbox[1])})`
+                            ).join(', ');
+                            onViolation(`Phone detected. Possible attempt to photograph test questions.`);
+                            consecutivePhoneCount.current = 0;
+                        }
+                    } else {
+                        consecutivePhoneCount.current = Math.max(0, consecutivePhoneCount.current - 1);
+                    }
+
                 } catch (error) {
-                    console.error("Face detection error:", error);
+                    console.error("Detection error:", error);
                 }
-            }, 1000);
+            }, 500);
         };
 
         return () => {
@@ -147,7 +189,7 @@ const TestProctoring = ({ onViolation, onFatalViolation }) => {
                 clearInterval(detectionInterval.current);
             }
         };
-    }, [stream, isActive]);
+    }, [stream, isActive, faceModel, objectModel]);
 
     const handleRetry = () => {
         if (!isActive) return;
@@ -155,6 +197,8 @@ const TestProctoring = ({ onViolation, onFatalViolation }) => {
             streamRef.current.getTracks().forEach(track => track.stop());
         }
         consecutiveNoFaceCount.current = 0;
+        consecutiveMultiFaceCount.current = 0;
+        consecutivePhoneCount.current = 0;
         startVideo();
     };
 
@@ -167,7 +211,7 @@ const TestProctoring = ({ onViolation, onFatalViolation }) => {
             {cameraError ? (
                 <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center">
                     <p className="text-pink-200 text-sm mb-4">{cameraError}</p>
-                    <button 
+                    <button
                         onClick={handleRetry}
                         className="flex items-center gap-2 bg-yellow-50 text-richblack-900 px-3 py-2 rounded-md hover:scale-95 transition-all"
                     >
@@ -176,9 +220,9 @@ const TestProctoring = ({ onViolation, onFatalViolation }) => {
                     </button>
                 </div>
             ) : (
-                <video 
-                    ref={videoRef} 
-                    autoPlay 
+                <video
+                    ref={videoRef}
+                    autoPlay
                     playsInline
                     muted
                     className="w-full h-full object-cover"

@@ -1,5 +1,5 @@
 import "./App.css";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import Home from "./pages/Home";
 import NavBar from "./Components/common/NavBar";
 import Footer from "./Components/common/Footer";
@@ -35,22 +35,28 @@ import PurchaseHistory from "./Components/core/Dashboard/PurchaseHistory";
 import InstructorDashboard from "./Components/core/Dashboard/InstructorDashboard/InstructorDashboard";
 import { RiWifiOffLine } from "react-icons/ri";
 import AdminPannel from "./Components/core/Dashboard/AdminPannel";
-import Test from "./Components/core/Dashboard/MyCourses/Test"
+import Test from "./Components/core/Dashboard/MyCourses/Test";
 
 function App() {
   console.log = function () {};
   const user = useSelector((state) => state.profile.user);
   const progress = useSelector((state) => state.loadingBar);
   const dispatch = useDispatch();
+  const location = useLocation();
+
+  const isTestPage =
+    location.pathname.includes("/dashboard/enrolled-courses/view-course") &&
+    location.pathname.includes("/test");
+
   return (
-    <div className=" w-screen min-h-screen bg-richblack-900 flex flex-col font-inter">
+    <div className="w-screen min-h-screen bg-richblack-900 flex flex-col font-inter">
       <LoadingBar
         color="#FFD60A"
         height={1.4}
         progress={progress}
         onLoaderFinished={() => dispatch(setProgress(0))}
       />
-      <NavBar setProgress={setProgress}></NavBar>
+      {!isTestPage && <NavBar setProgress={setProgress} />}
       {!navigator.onLine && (
         <div className="bg-red-500 flex text-white text-center p-2 bg-richblack-300 justify-center gap-2 items-center">
           <RiWifiOffLine size={22} />
@@ -101,8 +107,6 @@ function App() {
 
         <Route path="/search/:searchQuery" element={<SearchCourse />} />
 
-        
-
         <Route
           element={
             <PrivateRoute>
@@ -110,7 +114,10 @@ function App() {
             </PrivateRoute>
           }
         >
-          <Route path="/dashboard/enrolled-courses/view-course/:courseId/test" element={<Test />} />
+          <Route
+            path="/dashboard/enrolled-courses/view-course/:courseId/test"
+            element={<Test />}
+          />
           <Route path="dashboard/my-profile" element={<MyProfile />} />
           <Route path="dashboard/settings" element={<Setting />} />
           {user?.accountType === ACCOUNT_TYPE.STUDENT && (
@@ -166,7 +173,7 @@ function App() {
 
         <Route path="*" element={<Home />} />
       </Routes>
-      <Footer />
+      {!isTestPage && <Footer />}
     </div>
   );
 }

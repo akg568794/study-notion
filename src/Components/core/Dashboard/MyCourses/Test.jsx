@@ -21,6 +21,8 @@ const Test = () => {
   const [violationCount, setViolationCount] = useState(0);
   const [pageVisible, setPageVisible] = useState(true);
   const [isTestActive, setIsTestActive] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showPreTestInfo, setShowPreTestInfo] = useState(true);
 
   const handleSubmit = async (isAutoSubmit = false) => {
     if (!isTestActive) return; // Prevent multiple submissions
@@ -30,10 +32,6 @@ const Test = () => {
     
     // Clear any existing loading toasts
     toast.dismiss();
-    
-    if (isAutoSubmit) {
-      toast.error("Test auto-submitted due to violations");
-    }
 
     const response = await submitTest({ courseId, answers }, token);
     if (response) {
@@ -66,6 +64,54 @@ const Test = () => {
     handleSubmit(true);
   }, [isTestActive]);
 
+  // Function to handle entering fullscreen
+  const enterFullscreen = useCallback(() => {
+    const element = document.documentElement;
+    if (element.requestFullscreen) {
+      element.requestFullscreen();
+    } else if (element.webkitRequestFullscreen) {
+      element.webkitRequestFullscreen();
+    } else if (element.msRequestFullscreen) {
+      element.msRequestFullscreen();
+    }
+  }, []);
+
+  // Function to check if browser is in fullscreen mode
+  const isInFullscreen = () => {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+  };
+
+  // Handle fullscreen change
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const fullscreenStatus = isInFullscreen();
+      setIsFullscreen(fullscreenStatus);
+      
+      if (!fullscreenStatus && isTestActive) {
+        // Auto-submit when exiting fullscreen
+        handleSubmit(true);
+        toast.error("Test auto-submitted: Fullscreen mode exited");
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('msfullscreenchange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('msfullscreenchange', handleFullscreenChange);
+    };
+  }, [isTestActive]);
+
+  // Start test in fullscreen when questions are loaded
+  useEffect(() => {
+    if (questions.length > 0 && isTestActive && !isFullscreen) {
+      enterFullscreen();
+    }
+  }, [questions, isTestActive, isFullscreen, enterFullscreen]);
+
   // Prevent tab switching
   useEffect(() => {
     if (!isTestActive) return; // Don't track visibility if test is inactive
@@ -83,25 +129,58 @@ const Test = () => {
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [handleViolation, isTestActive]);
 
-  // Prevent copying
+  // Prevent copying and text selection
   useEffect(() => {
-    if (!isTestActive) return; // Don't track copying if test is inactive
+    if (!isTestActive) return;
 
     const handleCopy = (e) => {
       e.preventDefault();
       handleViolation("Copying content is not allowed");
     };
 
+    const handlePaste = (e) => {
+      e.preventDefault();
+      handleViolation("Pasting content is not allowed");
+    };
+
+    const handleSelect = (e) => {
+      e.preventDefault();
+      if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+        window.getSelection().removeAllRanges();
+      }
+    };
+
     const handleContextMenu = (e) => {
       e.preventDefault();
     };
 
+    // Prevent dragging
+    const handleDragStart = (e) => {
+      e.preventDefault();
+    };
+
     document.addEventListener("copy", handleCopy);
+    document.addEventListener("paste", handlePaste);
+    document.addEventListener("selectstart", handleSelect);
     document.addEventListener("contextmenu", handleContextMenu);
+    document.addEventListener("dragstart", handleDragStart);
+
+    // Add CSS to disable text selection
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
+    document.body.style.msUserSelect = 'none';
 
     return () => {
       document.removeEventListener("copy", handleCopy);
+      document.removeEventListener("paste", handlePaste);
+      document.removeEventListener("selectstart", handleSelect);
       document.removeEventListener("contextmenu", handleContextMenu);
+      document.removeEventListener("dragstart", handleDragStart);
+      
+      // Reset CSS
+      document.body.style.userSelect = '';
+      document.body.style.webkitUserSelect = '';
+      document.body.style.msUserSelect = '';
     };
   }, [handleViolation, isTestActive]);
 
@@ -163,6 +242,58 @@ const Test = () => {
       setCurrentQuestion(currentQuestion - 1);
     }
   };
+
+  const startTest = () => {
+    setShowPreTestInfo(false);
+    setIsTestActive(true);
+    enterFullscreen();
+  };
+
+  if (showPreTestInfo) {
+    return (
+      <div className="min-h-[calc(100vh-3.5rem)] p-6">
+        <div className="max-w-3xl mx-auto bg-richblack-800 p-6 rounded-lg">
+          <h1 className="text-3xl font-bold text-richblack-5 mb-6">Important Test Information</h1>
+          
+          <div className="space-y-6 text-richblack-100">
+            <h2 className="text-xl font-semibold text-yellow-50">Please read carefully before starting:</h2>
+            
+            <div className="bg-richblack-700 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-pink-200 mb-2">⚠️ Test Rules:</h3>
+              <ul className="list-disc pl-6 space-y-2">
+                <li>The test must be taken in fullscreen mode</li>
+                <li>Tab switching or leaving the test window is not allowed</li>
+                <li>Text selection is disabled during the test</li>
+                <li>Keyboard shortcuts are disabled</li>
+                <li>No other person should be visible in the camera</li>
+                <li>No phones or other devices are allowed</li>
+              </ul>
+            </div>
+
+            <div className="bg-richblack-700 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold text-caribbeangreen-300 mb-2">ℹ️ Important Notes:</h3>
+              <ul className="list-disc pl-6 space-y-2">
+                <li>You will receive warnings for rule violations</li>
+                <li>After 10 violations, the test will be automatically submitted</li>
+                <li>A stable internet connection is required</li>
+                <li>Ensure your webcam is working properly</li>
+                <li>Once started, the test cannot be paused</li>
+              </ul>
+            </div>
+
+            <div className="mt-8 flex justify-center">
+              <button
+                onClick={startTest}
+                className="px-6 py-3 bg-yellow-50 text-richblack-900 rounded-md hover:scale-95 transition-all duration-200 font-semibold"
+              >
+                I understand, Start Test
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
