@@ -7,6 +7,8 @@ const paymentRoutes = require("./routes/Payments");
 const profileRoutes = require("./routes/Profile");
 const CourseRoutes = require("./routes/Course");
 
+const testRoutes = require('./routes/Test');
+
 const database = require("./config/database");
 const cookieParser = require("cookie-parser");
 
@@ -22,6 +24,8 @@ database.connect();
 
 app.use(express.json());
 app.use(cookieParser());
+
+
 
 const whitelist = process.env.CORS_ORIGIN
   ? JSON.parse(process.env.CORS_ORIGIN)
@@ -51,6 +55,8 @@ app.use("/api/v1/payment", paymentRoutes);
 app.use("/api/v1/profile", profileRoutes);
 
 app.use("/api/v1/course", CourseRoutes);
+
+app.use('/api/v1/test', testRoutes);
 
 app.use("/api/v1/contact", require("./routes/ContactUs"));
 

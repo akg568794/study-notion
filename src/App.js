@@ -35,6 +35,7 @@ import PurchaseHistory from "./Components/core/Dashboard/PurchaseHistory";
 import InstructorDashboard from "./Components/core/Dashboard/InstructorDashboard/InstructorDashboard";
 import { RiWifiOffLine } from "react-icons/ri";
 import AdminPannel from "./Components/core/Dashboard/AdminPannel";
+import Test from "./Components/core/Dashboard/MyCourses/Test"
 
 function App() {
   console.log = function () {};
@@ -100,6 +101,8 @@ function App() {
 
         <Route path="/search/:searchQuery" element={<SearchCourse />} />
 
+        
+
         <Route
           element={
             <PrivateRoute>
@@ -107,6 +110,7 @@ function App() {
             </PrivateRoute>
           }
         >
+          <Route path="/dashboard/enrolled-courses/view-course/:courseId/test" element={<Test />} />
           <Route path="dashboard/my-profile" element={<MyProfile />} />
           <Route path="dashboard/settings" element={<Setting />} />
           {user?.accountType === ACCOUNT_TYPE.STUDENT && (

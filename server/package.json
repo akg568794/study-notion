@@ -24,6 +24,7 @@
     "nodemailer": "^6.9.1",
     "nodemon": "^2.0.22",
     "otp-generator": "^4.0.1",
+    "pdfkit": "^0.17.0",
     "razorpay": "^2.8.6"
   },
   "engines": {
