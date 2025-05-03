@@ -322,6 +322,7 @@ const Test = () => {
             <div className="bg-richblack-700 p-4 rounded-lg">
               <h3 className="text-lg font-semibold text-caribbeangreen-300 mb-2">ℹ️ Important Notes:</h3>
               <ul className="list-disc pl-6 space-y-2">
+              <li>Minimum 70% marks needed for Certification.</li>
                 <li>You will receive warnings for rule violations</li>
                 <li>After 10 violations, the test will be automatically submitted</li>
                 <li>A stable internet connection is required</li>
