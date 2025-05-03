@@ -1,7 +1,7 @@
 const Test = require('../models/Test');
 const TestResult = require('../models/TestResult');
 const TestQuestions = require('../models/TestQuestions');
-const Certificate = require('../utils/certifcateGenerator');
+
 
 exports.evaluateTest = async (req, res) => {
   try {
@@ -36,11 +36,6 @@ exports.evaluateTest = async (req, res) => {
       courseId,
       passed,
     });
-
-    // if (passed) {
-    //   const certificateUrl = await Certificate.generate(req.user.id, courseId);
-    //   return res.status(200).json({ success: true, passed, certificateUrl });
-    // }
 
     res.status(200).json({ success: true, passed });
   } catch (error) {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
-import { submitTest, fetchTestResult } from '../../../../services/operations/testApi';
+import { fetchTestResult } from '../../../../services/operations/testApi';
 import axios from 'axios';
 import { BiArrowBack } from 'react-icons/bi';
 import TestProctoring from './TestProctoring';
@@ -25,21 +25,58 @@ const Test = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showPreTestInfo, setShowPreTestInfo] = useState(true);
 
-  const handleSubmit = async (isAutoSubmit = false) => {
-    if (!isTestActive) return; // Prevent multiple submissions
-    
-    setIsTestActive(false); // Disable further test interactions
-    setLoading(true);
-    
-    // Clear any existing loading toasts
-    toast.dismiss();
+  const handleSubmit = async (isTimeUp = false) => {
+    try {
+      if (isTimeUp) {
+        toast.error("Time's up! Test submitted automatically.");
+      }
+      setLoading(true);
+      
+      // Get the user details
+      const userResponse = await axios.get("http://localhost:4000/api/v1/profile/getUserDetails", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      // Get course details using the proper API call
+      const courseResponse = await axios.post("http://localhost:4000/api/v1/course/getCourseDetails", 
+        { courseId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-    const response = await submitTest({ courseId, answers }, token);
-    if (response) {
-      setResult(response);
+      const userData = userResponse.data.data;
+      const courseData = courseResponse.data.data[0]; // Access first element of data array
+
+      // Calculate score
+      let score = 0;
+      questions.forEach((question, index) => {
+        if (answers[index] === question.correctAnswer) {
+          score++;
+        }
+      });
+
+      const percentage = (score / questions.length) * 100;
+      const passed = percentage >= 70;
+
+      setResult({
+        score,
+        percentage,
+        passed,
+        userId: userData._id,
+        userName: `${userData.firstName} ${userData.lastName}`,
+        courseName: courseData.courseName,
+        courseId
+      });
+      
       setShowResult(true);
+      setIsTestActive(false);
+      exitFullscreen();
+      
+    } catch (error) {
+      console.error('Error submitting test:', error);
+      toast.error('Failed to submit test');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   // Handle violations from proctoring
@@ -74,6 +111,17 @@ const Test = () => {
       element.webkitRequestFullscreen();
     } else if (element.msRequestFullscreen) {
       element.msRequestFullscreen();
+    }
+  }, []);
+
+  // Function to exit fullscreen
+  const exitFullscreen = useCallback(() => {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    } else if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+    } else if (document.msExitFullscreen) {
+      document.msExitFullscreen();
     }
   }, []);
 
