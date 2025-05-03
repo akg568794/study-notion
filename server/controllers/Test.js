@@ -37,10 +37,10 @@ exports.evaluateTest = async (req, res) => {
       passed,
     });
 
-    if (passed) {
-      const certificateUrl = await Certificate.generate(req.user.id, courseId);
-      return res.status(200).json({ success: true, passed, certificateUrl });
-    }
+    // if (passed) {
+    //   const certificateUrl = await Certificate.generate(req.user.id, courseId);
+    //   return res.status(200).json({ success: true, passed, certificateUrl });
+    // }
 
     res.status(200).json({ success: true, passed });
   } catch (error) {

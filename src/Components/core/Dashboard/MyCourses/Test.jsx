@@ -6,6 +6,7 @@ import axios from 'axios';
 import { BiArrowBack } from 'react-icons/bi';
 import TestProctoring from './TestProctoring';
 import { toast } from 'react-hot-toast';
+import CertificateGenerator from './CertificateGenerator';
 
 const Test = () => {
   const navigate = useNavigate();
@@ -315,17 +316,22 @@ const Test = () => {
             <p className="text-xl text-richblack-100">
               {result.passed ? 'You have passed the test!' : 'You did not pass the test.'}
             </p>
-            {result.passed && result.certificateUrl && (
-              <a
-                href={result.certificateUrl}
-                className="mt-6 inline-block px-6 py-3 bg-yellow-50 text-richblack-900 rounded-md hover:scale-95 transition-all duration-200"
-              >
-                Download Certificate
-              </a>
+            {result.passed && (
+              <CertificateGenerator
+                userId={result.userId}
+                courseId={courseId}
+                userName={result.userName || "Student"}
+                courseName={result.courseName || "Course"}
+                completionDate={new Date().toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              />
             )}
             <button
               onClick={() => navigate(`/dashboard/enrolled-courses/view-course/${courseId}/section/${courseSectionData?.[0]?._id}/sub-section/${courseSectionData?.[0]?.subSection?.[0]?._id}`)}
-              className="mt-6 px-6 py-3 bg-richblack-700 text-richblack-50 rounded-md hover:bg-richblack-600 transition-all duration-200 flex items-center gap-2 mx-auto"
+              className=" mt-5 px-6 bg-richblack-700 text-richblack-50 rounded-md hover:bg-richblack-600 transition-all duration-200 flex items-center gap-2 mx-auto"
             >
               <BiArrowBack /> Back to Course
             </button>
